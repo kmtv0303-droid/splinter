@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Run splinter's deterministic checks through Claude Code in locked-down,
+# non-interactive mode.
+#
+# Permission model (see .claude/README.md):
+#   --permission-mode dontAsk   anything that would prompt is denied; this mode
+#                               is never part of the interactive Shift+Tab cycle
+#   --permission-prompts none   nobody is around to answer, so never wait
+#   --allowedTools              exact allowlist; rules without a trailing " *"
+#                               match the command verbatim only
+#   --bare                      skip hooks, plugins, MCP servers, auto memory and
+#                               CLAUDE.md so the run is the same on every machine
+#
+# Requires: claude >= 2.1.259 (for --permission-prompts), and in --bare mode an
+# ANTHROPIC_API_KEY in the environment.
+#
+# Usage:
+#   bin/claude-check                 # run the checks, print Claude's report
+#   bin/claude-check --no-bare       # keep project hooks/skills/CLAUDE.md loaded
+#   CLAUDE_CHECK_PROMPT="..." bin/claude-check   # override the task prompt
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+bare_flag="--bare"
+if [ "${1:-}" = "--no-bare" ]; then
+    bare_flag=""
+    shift
+fi
+
+# Every command Claude is allowed to run, exactly as it must be typed. A
+# compound command such as `python bin/compile.py; echo $?` does not match and
+# is denied, which is the point.
+allowed_tools="Read,Glob,Grep"
+allowed_tools+=",Bash(python bin/compile.py)"
+allowed_tools+=",Bash(python bin/check_lints.py)"
+allowed_tools+=",Bash(git diff --exit-code splinter.sql)"
+
+default_prompt='Run these three commands one at a time, each exactly as written
+with nothing appended or prepended, and do not run anything else:
+
+1. python bin/compile.py
+2. git diff --exit-code splinter.sql
+3. python bin/check_lints.py
+
+Then report, in one line per command, whether it succeeded or failed and the
+first line of any error output. Do not edit files.'
+
+prompt="${CLAUDE_CHECK_PROMPT:-$default_prompt}"
+
+exec claude ${bare_flag} -p "${prompt}" \
+    --permission-mode dontAsk \
+    --permission-prompts none \
+    --allowedTools "${allowed_tools}" \
+    --max-turns 12 \
+    "$@"
