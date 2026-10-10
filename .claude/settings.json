@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python bin/compile.py)",
+      "Bash(python bin/check_lints.py)",
+      "Bash(git diff --exit-code splinter.sql)",
+      "Bash(pre-commit run --all-files)"
+    ]
+  }
+}
